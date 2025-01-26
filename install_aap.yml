@@ -1,0 +1,288 @@
+[ansible@controller opt]$ sudo cat install_aap.yml 
+---
+- name: Automate RHEL Setup for Ansible Automation Platform Installation
+  hosts: localhost
+  become: true
+  vars_files:
+    - secrets.pass  # Load variables from secrets.pass
+
+  tasks:
+    # Step 1
+    - name: Set ANSIBLE_COLLECTIONS_PATH environment variable
+      shell: |
+        export ANSIBLE_COLLECTIONS_PATH=/opt/ansible-automation-platform-containerized-setup-{{ version_install | replace('.', '') }}/collections/
+      args:
+        executable: /bin/bash
+      environment:
+        ANSIBLE_COLLECTIONS_PATH: "/opt/ansible-automation-platform-containerized-setup-{{ version_install | replace('.', '') }}/collections/"
+
+    # Step 2
+    - name: Set fully qualified hostname
+      hostname:
+        name: "{{ hostname_install }}"
+    
+    # Step 3
+    - name: Ensure /etc/hostname is correct
+      copy:
+        content: "{{ hostname_install }}\n"
+        dest: /etc/hostname
+
+    # Step 4
+    - name: Disable DHCP hostname override in NetworkManager
+      copy:
+        dest: /etc/NetworkManager/conf.d/00-hostname.conf
+        content: |
+          [main]
+          hostname={{ hostname_install }}
+          dhcp=dhclient
+    
+    # Step 5
+    - name: Restart NetworkManager
+      systemd:
+        name: NetworkManager
+        state: restarted
+        enabled: yes
+
+    # Step 6
+    - name: Register the system to Red Hat Subscription Manager (if not already registered)
+      block:
+        - name: Check subscription status
+          command: subscription-manager status
+          register: rhsm_status
+          failed_when: false
+          changed_when: false
+
+        - name: Register the system
+          command: >
+            subscription-manager register
+            --username={{ registry_username }}
+            --password={{ registry_password }}
+          when:
+            - "'Overall Status: Current' not in rhsm_status.stdout"
+          register: register_output
+          failed_when:
+            - register_output.rc != 0
+            - "'Este sistema já foi registrado' not in register_output.stderr"
+          changed_when:
+            - "'Este sistema já foi registrado' not in register_output.stderr"
+      when: registry_username is defined and registry_password is defined
+
+    # Step 7
+    - name: Enable required repositories
+      command: subscription-manager repos --enable={{ item }}
+      with_items:
+        - "rhel-9-for-x86_64-appstream-rpms"
+        - "rhel-9-for-x86_64-baseos-rpms"
+        - "ansible-automation-platform-2.5-for-rhel-9-x86_64-rpms"
+      when: "'Overall Status: Current' not in rhsm_status.stdout"
+
+    # Step 8    
+    - name: Check version_install loaded from secrets.pass
+      debug:
+        msg: "Configured version for installation: {{ version_install }}"
+
+    # Step 9
+    - name: Set version_install as a fact
+      set_fact:
+        version_install: "{{ version_install }}"
+      when: version_install is defined
+
+    # Step 10
+    - name: Temporarily disable SELinux enforcement
+      command: setenforce 0
+      ignore_errors: yes
+      tags:
+        - selinux
+
+    # Step 11
+    - name: Install required packages for automation setup
+      yum:
+        name:
+          - podman
+          - python3-pip
+          - wget
+          - git
+          - rsync
+        state: present
+      tags:
+        - install
+
+    # Step 12
+    - name: Set fully qualified hostname
+      hostname:
+        name: "{{ hostname_install }}"
+      tags:
+        - hostname
+
+    # Step 13
+    - name: Update /etc/hosts to map hostname to 127.0.0.1
+      lineinfile:
+        path: /etc/hosts
+        regexp: '^127.0.0.1'
+        line: "127.0.0.1   {{ hostname_install }} {{ ansible_fqdn }}"
+        state: present
+      tags:
+        - hostname
+
+    # Step 14
+    - name: Locate and copy .zip files from /opt to /home/ansible
+      find:
+        paths: /opt
+        patterns: "*.zip"
+        file_type: file
+      register: zip_files
+
+    # Step 15
+    - name: Copy located .zip files to /home/ansible
+      copy:
+        src: "{{ item.path }}"
+        dest: "/home/ansible/"
+        remote_src: yes
+      with_items: "{{ zip_files.files }}"
+      tags:
+        - copy
+
+    # Step 16
+    - name: Create ansible user without privileges
+      user:
+        name: "ansible"
+        state: present
+        shell: /bin/bash
+        password: "{{ password | password_hash('sha512') }}"  # Use the "password" variable from secrets.pass
+      tags:
+        - user
+
+    # Step 17
+    - name: Create directory for AAP containerized setup (version 2.5)
+      file:
+        path: "/opt/ansible-automation-platform-containerized-setup-2.5-8-x86_64"
+        state: directory
+        mode: '0755'
+      tags:
+        - directory
+      when: version_install == "2.5"
+
+    # Step 18
+    - name: Create directory for AAP containerized setup (version 2.4)
+      file:
+        path: "/opt/ansible-automation-platform-containerized-setup-2.4-2"
+        state: directory
+        mode: '0755'
+      tags:
+        - directory
+      when: version_install == "2.4"
+
+    # Step 19
+    - name: Extract the correct bundle file (version 2.5)
+      unarchive:
+        src: "/opt/ansible-automation-platform-containerized-setup-bundle-2.5-8-x86_64.tar.gz"
+        dest: "/opt/ansible-automation-platform-containerized-setup-2.5-8-x86_64"
+        remote_src: yes
+        extra_opts: ['--strip-components=1']  # Avoid creating a subdirectory
+      tags:
+        - extract
+      when: version_install == "2.5"
+
+    # Step 20
+    - name: Extract the correct bundle file (version 2.4)
+      unarchive:
+        src: "/opt/ansible-automation-platform-containerized-setup-bundle-2.4-2-x86_64.tar.gz"
+        dest: "/opt/ansible-automation-platform-containerized-setup-2.4-2"
+        remote_src: yes
+        extra_opts: ['--strip-components=1']  # Avoid creating a subdirectory
+      tags:
+        - extract
+      when: version_install == "2.4"
+
+    # Step 21
+    - name: Generate the inventory file (version 2.5)
+      template:
+        src: "{{ playbook_dir }}/inventory_template.j2"
+        dest: "/opt/ansible-automation-platform-containerized-setup-2.5-8-x86_64/inventory"
+      when: version_install == "2.5"
+      tags:
+        - inventory
+
+    # Step 22
+    - name: Generate the inventory file (version 2.4)
+      template:
+        src: "{{ playbook_dir }}/inventory_template.j2"
+        dest: "/opt/ansible-automation-platform-containerized-setup-2.4-2/inventory"
+      when: version_install == "2.4"
+      tags:
+        - inventory
+
+    # Step 23
+    - name: Debug inventory creation status (version 2.5)
+      debug:
+        msg: "Inventory file created successfully at /opt/ansible-automation-platform-containerized-setup-2.5-8-x86_64/inventory"
+      when: version_install == "2.5"
+
+    # Step 24
+    - name: Debug inventory creation status (version 2.4)
+      debug:
+        msg: "Inventory file created successfully at /opt/ansible-automation-platform-containerized-setup-2.4-2/inventory"
+      when: version_install == "2.4"
+
+    # Step 25
+    - name: Add redis group with container configurations to inventory (version 2.5)
+      lineinfile:
+        path: "/opt/ansible-automation-platform-containerized-setup-2.5-8-x86_64/inventory"
+        regexp: '^\[redis\]'
+        line: |
+          [redis]
+          redis-node-1 ansible_connection=local
+          redis-node-2 ansible_connection=local
+          redis-node-3 ansible_connection=local
+      when: version_install == "2.5"
+      tags:
+        - redis
+
+    # Step 26
+    - name: Add automationgateway group to inventory (version 2.5)
+      lineinfile:
+        path: "/opt/ansible-automation-platform-containerized-setup-2.5-8-x86_64/inventory"
+        regexp: '^\[automationgateway\]'
+        line: |
+          [automationgateway]
+          {{ hostname_install }} ansible_connection=local
+      when: version_install == "2.5"
+      tags:
+        - inventory
+
+    # Step 27
+    - name: Ensure the directory for SSL certificates exists (version 2.5 only)
+      file:
+        path: "/opt/ansible-automation-platform-containerized-setup-2.5-8-x86_64/tls"
+        state: directory
+        mode: '0755'
+      when: version_install == "2.5"
+      tags:
+        - ssl
+
+    # Step 28
+    - name: Generate SSL certificate for the gateway (version 2.5 only)
+      command: >
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048
+        -keyout /opt/ansible-automation-platform-containerized-setup-2.5-8-x86_64/tls/private.key
+        -out /opt/ansible-automation-platform-containerized-setup-2.5-8-x86_64/tls/certificate.crt
+        -subj "/CN={{ ansible_fqdn }}"
+        -addext "subjectAltName=DNS:{{ ansible_fqdn }}"
+      args:
+        creates: "/opt/ansible-automation-platform-containerized-setup-2.5-8-x86_64/tls/certificate.crt"
+      when: version_install == "2.5"
+      tags:
+        - ssl
+
+    # Step 29
+    - name: Create install.yaml file for the containerized installer
+      copy:
+        dest: "/opt/ansible-automation-platform-containerized-setup-{{ '2.5-8-x86_64' if version_install == '2.5' else '2.4-2' }}/install.yaml"
+        content: |
+          ---
+          - name: Run containerized installer
+            hosts: localhost
+            tasks:
+              - name: Run ansible.containerized_installer.install
+                command: ansible-playbook -i inventory ansible.containerized_installer.install
+      when: version_install is defined
