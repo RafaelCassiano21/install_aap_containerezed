@@ -1,5 +1,3 @@
-# Saving the translated README content to a file for the user to download.
-readme_content = """
 # Playbook for Installing Ansible Automation Platform (AAP) on Containers
 
 This repository provides a playbook to assist with the installation of Ansible Automation Platform in versions **2.4** or **2.5** using RHEL 9.
