@@ -84,6 +84,11 @@ Use `http` or `https` protocols with the following ports:
 
 ---
 
+## **Clear All /opt:**
+```bash
+sudo rm -rf /opt/*
+```
+
 ## **Command to Remove Installation:**
 
 Run the following command to remove the installation:
