@@ -1,0 +1,6 @@
+[local]
+localhost ansible_connection=local
+
+[all:vars]
+ansible_user=ansible
+ansible_become_pass={{ password }}
