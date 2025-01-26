@@ -1,0 +1,36 @@
+[automationcontroller]
+{{ hostname_install }} ansible_connection=local
+
+[automationhub]
+{{ hostname_install }} ansible_connection=local
+
+[automationeda]
+{{ hostname_install }} ansible_connection=local
+
+[database]
+{{ hostname_install }} ansible_connection=local
+
+[all:vars]
+ansible_user=ansible
+ansible_become_pass={{ password }}
+postgresql_admin_username=postgres
+postgresql_admin_password={{ postgresql_admin_password }}
+registry_auth=true
+registry_username={{ registry_username }}
+registry_password={{ registry_password }}
+controller_admin_password={{ controller_admin_password }}
+controller_pg_host={{ hostname_install }}
+controller_pg_password={{ controller_pg_password }}
+hub_admin_password={{ hub_admin_password }}
+hub_pg_host={{ hostname_install }}
+hub_pg_password={{ hub_pg_password }}
+eda_admin_password={{ eda_admin_password }}
+eda_pg_host={{ hostname_install }}
+eda_pg_password={{ eda_pg_password }}
+controller_postinstall=true
+controller_license_file={{ controller_license_file }}
+controller_postinstall_dir={{ controller_postinstall_dir }}
+gateway_admin_password={{ gateway_admin_password }}
+gateway_pg_host={{ hostname_install }}
+gateway_pg_password={{ gateway_pg_password }}
+redis_mode=standalone
