@@ -27,7 +27,7 @@ This repository provides a playbook to assist with the installation of Ansible A
    - Choose the desired version (2.4 or 2.5) for RHEL 9.
    - Download the installer "**Ansible Automation Platform Containerized Setup Bundle**".
 
-4. **Move the Files:**
+4. **Move all Files for /opt:**
    - Save the installer and the manifest `.zip` file in the `/opt` directory on RHEL 9.
 
 5. **Clone Repository:**
