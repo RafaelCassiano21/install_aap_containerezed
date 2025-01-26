@@ -68,7 +68,7 @@ This repository provides a playbook to assist with the installation of Ansible A
       ```
     - Execute the following command:
       ```bash
-      ansible-playbook -i inventory ansible.containerized_installer.uninstall
+      ansible-playbook -i inventory ansible.containerized_installer.install
       ```
     - Wait for the process to finish.
 
