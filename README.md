@@ -87,6 +87,7 @@ Use `http` or `https` protocols with the following ports:
 ## **FINALY : Clear All /opt:**
 ```bash
 sudo rm -rf /opt/*
+sudo setenforce 1
 ```
 
 ## **OPTIONAL : Command to Remove Installation:**
