@@ -286,3 +286,52 @@
               - name: Run ansible.containerized_installer.install
                 command: ansible-playbook -i inventory ansible.containerized_installer.install
       when: version_install is defined
+
+    # Step 30
+    - name: Criar diretório se não existir
+      file:
+        path: /home/ansible/aap/tls/extracted
+        state: directory
+        mode: '0755'
+        owner: ansible
+        group: ansible
+    
+    # Step 31
+    - name: Ajustar permissões do diretório para ansible
+      file:
+        path: /home/ansible/aap/tls/extracted
+        state: directory
+        mode: '0755'
+        owner: ansible
+        group: ansible
+      when: ansible_user_id != "root"
+
+    # Step 32
+    - name: Ajustar permissões do diretório para root (se rodando como root)
+      file:
+        path: /home/ansible/aap/tls/extracted
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+      when: ansible_user_id == "root"
+
+    # Step 33
+    - name: Verificar status do SELinux
+      command: getenforce
+      register: selinux_status
+      changed_when: false
+
+    # Step 34
+    - name: Temporariamente desativar SELinux (para testar)
+      command: setenforce 0
+      when: selinux_status.stdout == "Enforcing"
+
+    # Step 35
+    - name: Aplicar contexto correto ao diretório (definitivo)
+      command: semanage fcontext -a -t container_file_t "/home/ansible/aap/tls/extracted(/.*)?"
+      when: selinux_status.stdout == "Enforcing"
+
+
+
+
