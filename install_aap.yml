@@ -1,4 +1,4 @@
-[ansible@controller opt]$ sudo cat install_aap.yml 
+
 ---
 - name: Automate RHEL Setup for Ansible Automation Platform Installation
   hosts: localhost
